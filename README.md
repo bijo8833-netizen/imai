@@ -37,6 +37,18 @@ python3 -m http.server 8080
 - `app/app.js`: 탭 전환, 폼 렌더링, 사용자 입력 수집, 결과·리포트 출력
 - `app/index.html`, `app/style.css`: UI
 
+## 전자책(PDF) 가이드북 생성기 (`ebook/`)
+
+`app/`의 내용을 초등학생도 이해할 수 있도록 쉽게 풀어 쓴 전자책을 PDF로 만드는 프로그램입니다. 회사명 배지가 포함된 표지, 항목별 카드(쉬운 설명·준비서류·입력 방법), 준비서류 체크리스트를 담은 A4 PDF를 생성합니다.
+
+```bash
+cd ebook
+python3 build.py   # ebook.html 생성
+node render.js      # PDF 변환(guidebook.pdf) — Playwright + Chromium 필요
+```
+
+자세한 사용법·커스터마이징(회사명, 내용, 디자인)은 `ebook/README.md` 참고.
+
 ### 유의사항
 
 - 모든 계산 결과는 입력값 기준의 **참고용 추정치**입니다. 법인세 경정청구는 국세만 계산하며(지방소득세는 별도 경정청구 대상), 정부지원사업 매칭 결과 중 공모형 항목은 확정 지원액이 아닙니다.
