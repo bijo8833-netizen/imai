@@ -13,6 +13,12 @@
  * 기업마당(bizinfo.go.kr), 고용24(work24.go.kr), K-Startup(k-startup.go.kr)에서 확인해야 한다.
  * 감면율·지원단가는 매년 개정되므로 아래 수치는 2026년 기준 참고치이며, 실제 적용 전
  * 국세청/소관 부처 최신 공고 및 세무 전문가 확인이 필요하다.
+ *
+ * 2025년 세법개정(2026년 시행) 반영 이력:
+ *  - 성과공유 중소기업 경영성과급 세액공제율 15% → 10%로 수정 (조특법 제19조)
+ *  - 통합투자세액공제 기본공제율(일반 자산) 중소 3%→10%, 중견 2%→3%로 수정 (조특법 제24조)
+ *  - 중소기업 특별세액감면: 중기업은 수도권 소재 시 감면 대상에서 제외되는 규정을 반영 (소기업만 수도권에서도 적용)
+ *  - 법인세율 전 구간 1%p 인상(10/20/22/25%, 2026년 개시 사업연도부터) → rules.js에 반영
  */
 
 const REGION_OPTIONS = [
@@ -111,19 +117,19 @@ const PROGRAMS = [
     legalBasis: "조세특례제한법 제7조",
     type: "tax_credit",
     eligible(p) {
-      return isSmallOrMediumSME(p) && p.eligibleIndustry && p.corpTaxBase > 0;
+      if (!isSmallOrMediumSME(p) || !p.eligibleIndustry || !(p.corpTaxBase > 0)) return false;
+      // 중기업(소기업 외 중소기업)은 수도권 소재 시 특별세액감면 대상에서 제외된다. 소기업은 수도권에서도 적용된다.
+      if (p.companySize === "medium" && regionInfo(p.region).regionGroup === "capital") return false;
+      return true;
     },
     estimate(p) {
-      const region = regionInfo(p.region);
-      let rate;
-      if (p.companySize === "small") rate = 0.2;
-      else rate = region.regionGroup === "capital" ? 0.05 : 0.15;
+      const rate = p.companySize === "small" ? 0.2 : 0.15;
       const raw = num(p.corpTaxBase) * rate;
       const amount = Math.min(raw, 100_000_000);
       return {
         amount,
         confirmed: true,
-        noteText: `감면율 ${Math.round(rate * 100)}%(업종·규모별 5~30%, 연간 감면한도 1억원). 창업중소기업 세액감면과 중복 적용 불가하며 유리한 항목을 선택해야 합니다.`,
+        noteText: `감면율 ${Math.round(rate * 100)}%(업종·규모별 5~30%, 연간 감면한도 1억원). 중기업은 수도권 소재 시 대상이 아니며, 소기업만 수도권에서도 적용됩니다. 창업중소기업 세액감면과 중복 적용 불가하며 유리한 항목을 선택해야 합니다.`,
       };
     },
   },
@@ -138,7 +144,7 @@ const PROGRAMS = [
     },
     estimate(p) {
       const region = regionInfo(p.region);
-      const baseRate = isSmallOrMediumSME(p) ? 0.03 : p.companySize === "midsize" ? 0.02 : 0.01;
+      const baseRate = p.companySize === "small" || p.companySize === "medium" ? 0.10 : p.companySize === "midsize" ? 0.03 : 0.01;
       const amount = num(p.investAmount) * baseRate * region.investCoef;
       return {
         amount,
@@ -162,7 +168,7 @@ const PROGRAMS = [
       return {
         amount,
         confirmed: true,
-        noteText: `일반 연구인력개발비 기준 공제율 ${Math.round(rate * 100)}%(신성장·원천기술 R&D는 별도 우대율 적용 가능).`,
+        noteText: `일반 연구·인력개발비를 당기분 방식으로 계산한 공제율(중소 25%/중견 8~15%/대기업 0~2%)입니다. 전년 대비 지출 증가분에 적용하는 증가분 방식(중소 50%/중견 40%/대기업 25%)이 더 유리할 수 있으니 두 방식을 비교해야 합니다. 신성장·원천기술 R&D는 별도 우대율이 적용됩니다.`,
       };
     },
   },
@@ -206,8 +212,8 @@ const PROGRAMS = [
       return p.companySize === "small" || p.companySize === "medium" ? num(p.bonusAmount) > 0 : false;
     },
     estimate(p) {
-      const amount = num(p.bonusAmount) * 0.15;
-      return { amount, confirmed: true, noteText: "중소기업이 경영성과급을 지급한 경우 지급액의 15% 세액공제." };
+      const amount = num(p.bonusAmount) * 0.10;
+      return { amount, confirmed: true, noteText: "중소기업이 경영성과급을 지급한 경우 지급액의 10% 세액공제(2027년 12월 31일까지 지급분). 직전 과세연도 대비 상시근로자 수가 감소하면 공제가 배제됩니다." };
     },
   },
 

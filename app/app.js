@@ -177,7 +177,7 @@ function renderClaimResult(def, result, deadline) {
     const note = document.createElement("p");
     note.className = "empty-note";
     note.style.marginTop = "12px";
-    note.textContent = `손금 항목 반영 시: 과세표준 ${fmtWon(result.base)} → ${fmtWon(Math.max(result.base - result.addBack, 0))} (산출세액 ${fmtWon(result.taxBefore)} → ${fmtWon(result.taxAfter)}). 위 금액은 국세(법인세) 기준이며 지방소득세는 별도 경정청구 대상입니다.`;
+    note.textContent = `손금 항목 반영 시: 과세표준 ${fmtWon(result.base)} → ${fmtWon(Math.max(result.base - result.addBack, 0))} (산출세액 ${fmtWon(result.taxBefore)} → ${fmtWon(result.taxAfter)}). 위 금액은 국세(법인세) 기준이며 지방소득세는 별도 경정청구 대상입니다. 세율은 2026년 사업연도 기준(10/20/22/25%)이며, 2025년 이전 사업연도를 경정청구할 때는 해당 연도의 세율(9/19/21/24%)을 별도로 확인해야 합니다.`;
     card.appendChild(note);
   }
 
