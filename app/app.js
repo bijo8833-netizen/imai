@@ -95,6 +95,178 @@ function renderClaimForm() {
   calcBtn.addEventListener("click", handleCalculate);
   actions.appendChild(calcBtn);
   panel.appendChild(actions);
+
+  renderMultiYearSection(panel, def);
+}
+
+// ---------------- 여러 연도 한번에 계산 (엑셀 업로드) ----------------
+
+function renderMultiYearSection(panel, def) {
+  const title = document.createElement("h2");
+  title.className = "section-title";
+  title.textContent = "여러 연도 한번에 계산 (엑셀 업로드)";
+  panel.appendChild(title);
+
+  const note = document.createElement("p");
+  note.className = "empty-note";
+  note.textContent = "경정청구는 법정신고기한으로부터 5년 이내 신고분까지 가능합니다. 최근 5개 사업연도(또는 신고기간) 자료를 엑셀 한 장에 입력해서 한번에 확인해 보세요.";
+  panel.appendChild(note);
+
+  const uploadRow = document.createElement("div");
+  uploadRow.className = "actions";
+
+  const templateBtn = document.createElement("button");
+  templateBtn.className = "primary";
+  templateBtn.style.background = "#6b7280";
+  templateBtn.textContent = "엑셀 템플릿 다운로드";
+  templateBtn.addEventListener("click", () => downloadTemplate(state.activeTax));
+  uploadRow.appendChild(templateBtn);
+
+  const fileLabel = document.createElement("label");
+  fileLabel.className = "primary";
+  fileLabel.style.cssText = "background:#15803d;display:inline-flex;align-items:center;cursor:pointer;";
+  fileLabel.textContent = "엑셀 파일 업로드";
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.accept = ".xlsx,.xls,.csv";
+  fileInput.style.display = "none";
+  fileInput.addEventListener("change", handleMultiYearUpload);
+  fileLabel.appendChild(fileInput);
+  uploadRow.appendChild(fileLabel);
+
+  panel.appendChild(uploadRow);
+
+  const resultDiv = document.createElement("div");
+  resultDiv.id = "multiYearResult";
+  panel.appendChild(resultDiv);
+}
+
+function templateHeaders(taxType) {
+  const def = TAX_TYPES[taxType];
+  const periodLabel = taxType === "corp" ? "사업연도" : "과세기간";
+  const headers = [periodLabel, "법정신고기한(YYYY-MM-DD)"];
+  if (taxType === "corp") headers.push("과세표준(원)");
+  def.items.forEach((item) => headers.push(item.name));
+  return headers;
+}
+
+function downloadTemplate(taxType) {
+  const headers = templateHeaders(taxType);
+  const exampleRow = headers.map((h) => {
+    if (h.includes("사업연도")) return "2021";
+    if (h.includes("과세기간")) return "2021년 1기 확정";
+    if (h.includes("법정신고기한")) return "2022-03-31";
+    if (h.includes("과세표준")) return 500000000;
+    return 0;
+  });
+  const ws = XLSX.utils.aoa_to_sheet([headers, exampleRow]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, taxType === "corp" ? "법인세" : "부가가치세");
+  const filename = taxType === "corp" ? "법인세_경정청구_5년치_템플릿.xlsx" : "부가가치세_경정청구_5년치_템플릿.xlsx";
+  XLSX.writeFile(wb, filename);
+}
+
+function handleMultiYearUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const taxType = state.activeTax;
+  const def = TAX_TYPES[taxType];
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    let rows;
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+    } catch (err) {
+      renderMultiYearError("엑셀 파일을 읽지 못했습니다. 템플릿 형식에 맞게 입력했는지 확인해 주세요.");
+      return;
+    }
+    if (!rows.length) {
+      renderMultiYearError("업로드한 파일에 데이터 행이 없습니다.");
+      return;
+    }
+    const periodKey = taxType === "corp" ? "사업연도" : "과세기간";
+    const results = rows.map((row) => {
+      const period = String(row[periodKey] ?? "").trim() || "(연도 미입력)";
+      const legalDueDate = normalizeDate(row["법정신고기한(YYYY-MM-DD)"]);
+      const baseInput = taxType === "corp" ? row["과세표준(원)"] : null;
+
+      const checkedItems = {};
+      def.items.forEach((item) => {
+        const amount = Number(row[item.name]) || 0;
+        checkedItems[item.id] = { checked: amount > 0, amount };
+      });
+
+      const calc = def.computeRefund(baseInput, checkedItems);
+      const deadline = calcClaimDeadline(legalDueDate);
+      return { period, legalDueDate, calc, deadline };
+    });
+    renderMultiYearResult(results);
+  };
+  reader.readAsArrayBuffer(file);
+  event.target.value = "";
+}
+
+function normalizeDate(value) {
+  if (!value) return "";
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  const s = String(value).trim();
+  const m = s.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})/);
+  if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+  return s;
+}
+
+function renderMultiYearError(message) {
+  const container = document.getElementById("multiYearResult");
+  container.innerHTML = `<p class="empty-note">${message}</p>`;
+}
+
+function renderMultiYearResult(results) {
+  const container = document.getElementById("multiYearResult");
+  container.innerHTML = "";
+
+  const withinTotal = results
+    .filter((r) => r.deadline && r.deadline.withinPeriod)
+    .reduce((s, r) => s + r.calc.total, 0);
+  const allTotal = results.reduce((s, r) => s + r.calc.total, 0);
+
+  const card = document.createElement("div");
+  card.className = "result-card";
+  card.innerHTML = `
+    <div>청구기한(5년) 이내 연도 합계 &nbsp; <span class="total">${fmtWon(withinTotal)}</span></div>
+    <p class="empty-note" style="margin-top:6px;">업로드한 전체 연도 합계(기한 경과분 포함): ${fmtWon(allTotal)}</p>
+  `;
+
+  const table = document.createElement("table");
+  table.className = "result-table";
+  table.innerHTML = `
+    <thead><tr><th>연도/기간</th><th>법정신고기한</th><th>청구기한 상태</th><th>예상 환급액</th></tr></thead>
+    <tbody></tbody>
+  `;
+  const tbody = table.querySelector("tbody");
+  results.forEach((r) => {
+    const tr = document.createElement("tr");
+    let statusHtml = "-";
+    if (r.deadline) {
+      const cls = r.deadline.withinPeriod ? "ok" : "warn";
+      const text = r.deadline.withinPeriod
+        ? `기한 이내(잔여 ${r.deadline.remainingDays.toLocaleString("ko-KR")}일)`
+        : "기한 경과";
+      statusHtml = `<span class="deadline-badge ${cls}">${text}</span>`;
+    }
+    tr.innerHTML = `
+      <td>${r.period}</td>
+      <td>${r.legalDueDate || "-"}</td>
+      <td>${statusHtml}</td>
+      <td>${fmtWon(r.calc.total)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  card.appendChild(table);
+  container.appendChild(card);
 }
 
 function collectCheckedItems(def) {
