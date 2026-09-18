@@ -49,6 +49,19 @@ node render.js      # PDF 변환(guidebook.pdf) — Playwright + Chromium 필요
 
 자세한 사용법·커스터마이징(회사명, 내용, 디자인)은 `ebook/README.md` 참고.
 
+## 소스코드 PDF 생성기 (`codebook/`)
+
+`app/` 폴더의 계산 앱 소스코드 전체(index.html, style.css, app.js, rules.js, govSupport.js)를 구문 강조(syntax highlight)·줄번호가 있는 인쇄용 PDF로 뽑는 프로그램입니다.
+
+```bash
+cd codebook
+pip install pygments
+python3 build.py   # source.html 생성
+node render.js      # PDF 변환(source-code.pdf) — Playwright + Chromium 필요
+```
+
+자세한 사용법은 `codebook/README.md` 참고.
+
 ### 유의사항
 
 - 모든 계산 결과는 입력값 기준의 **참고용 추정치**입니다. 법인세 경정청구는 국세만 계산하며(지방소득세는 별도 경정청구 대상), 정부지원사업 매칭 결과 중 공모형 항목은 확정 지원액이 아닙니다.
